@@ -588,18 +588,15 @@ func (dp *DataPartition) NormalExtentRepairRead(p repl.PacketInterface, connect 
 		err = nil
 		reply := makeRspPacket(p.GetReqID(), p.GetPartitionID(), p.GetExtentID())
 		reply.SetStartT(p.GetStartT())
-		currReadSize := uint32(util.Min(int(needReplySize), int(dp.GetRepairBlockSize())))
-		if currReadSize == util.RepairReadBlockSize {
+		var currReadSize uint32
+		if isRepairRead {
+			currReadSize = uint32(util.Min(int(needReplySize), int(dp.GetRepairBlockSize())))
+		} else {
+			currReadSize = uint32(util.Min(int(needReplySize), util.CacheReadBlockSize))
+		}
+		if currReadSize == util.RepairReadBlockSize || currReadSize == util.BlockSize || currReadSize == util.CacheReadBlockSize {
 			var data []byte
-			data, err = proto.Buffers.Get(util.RepairReadBlockSize)
-			if err != nil {
-				log.LogErrorf("[NormalExtentRepairRead] dp(%v) failed to get repair data, err(%v)", dp.partitionID, err)
-				return
-			}
-			reply.SetData(data)
-		} else if currReadSize == util.BlockSize {
-			var data []byte
-			data, err = proto.Buffers.Get(util.BlockSize)
+			data, err = proto.Buffers.Get(int(currReadSize))
 			if err != nil {
 				log.LogErrorf("[NormalExtentRepairRead] dp(%v) failed to get repair data, err(%v)", dp.partitionID, err)
 				return
@@ -644,7 +641,7 @@ func (dp *DataPartition) NormalExtentRepairRead(p repl.PacketInterface, connect 
 		}
 		needReplySize -= currReadSize
 		offset += int64(currReadSize)
-		if currReadSize == util.ReadBlockSize || currReadSize == util.RepairReadBlockSize {
+		if currReadSize == util.ReadBlockSize || currReadSize == util.RepairReadBlockSize || currReadSize == util.CacheReadBlockSize {
 			proto.Buffers.Put(reply.GetData())
 		} else {
 			bytespool.Free(reply.GetData())
